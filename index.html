@@ -1,0 +1,1431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Type a differential equation, see its slope field, and click anywhere to trace the solution curve through that point.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F7FAFC'/%3E%3Cg stroke='%231E2D3D' stroke-width='2.2' stroke-linecap='round'%3E%3Cline x1='5' y1='11' x2='11' y2='9'/%3E%3Cline x1='14' y1='12' x2='20' y2='8'/%3E%3Cline x1='23' y1='12' x2='27' y2='5'/%3E%3Cline x1='5' y1='21' x2='11' y2='21'/%3E%3Cline x1='14' y1='22' x2='20' y2='19'/%3E%3Cline x1='23' y1='24' x2='27' y2='17'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+/* The wrapper the Claude artifact host normally supplies. */
+:root {
+  color-scheme: light;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+body { margin: 0; font: 14px system-ui, sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Slope Field Plotter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500&family=Fira+Sans:wght@400;500;600&family=Zilla+Slab:wght@500;600&display=swap">
+
+<style>
+/* Layout: a plot sheet on the left, an instrument panel at the right,
+   a readout rail underneath. Panel labels left, their numbers right. */
+:root {
+  --table:      #E3EAF0;   /* the surface the sheet lies on */
+  --sheet:      #F7FAFC;   /* the plot itself */
+  --ink:        #1E2D3D;   /* segments and headings */
+  --ink-soft:   #5A6E82;   /* secondary text */
+  --rule:       #CBD7E1;   /* grid lines and borders */
+  --axis:       #8095A8;
+  --field:      30, 45, 61;   /* segment stroke, as r,g,b for alpha mixing */
+  --focus:      #0E7490;
+
+  --pen-1: #C2410C;
+  --pen-2: #A21CAF;
+  --pen-3: #0E7490;
+  --pen-4: #B45309;
+  --pen-5: #4338CA;
+  --pen-6: #15803D;
+
+  --sans: "Fira Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --slab: "Zilla Slab", Georgia, "Times New Roman", serif;
+  --mono: "Fira Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --gap: 18px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --table:    #0D151E;
+    --sheet:    #141F2B;
+    --ink:      #DCE7F0;
+    --ink-soft: #8EA3B8;
+    --rule:     #22323F;
+    --axis:     #5E7488;
+    --field:    155, 184, 207;
+    --focus:    #38BDF8;
+    --pen-1: #FB923C;
+    --pen-2: #E879F9;
+    --pen-3: #22D3EE;
+    --pen-4: #FCD34D;
+    --pen-5: #A5B4FC;
+    --pen-6: #4ADE80;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --table:    #0D151E;
+  --sheet:    #141F2B;
+  --ink:      #DCE7F0;
+  --ink-soft: #8EA3B8;
+  --rule:     #22323F;
+  --axis:     #5E7488;
+  --field:    155, 184, 207;
+  --focus:    #38BDF8;
+  --pen-1: #FB923C;
+  --pen-2: #E879F9;
+  --pen-3: #22D3EE;
+  --pen-4: #FCD34D;
+  --pen-5: #A5B4FC;
+  --pen-6: #4ADE80;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--table);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 28px;
+}
+
+/* ---- formula bar ---- */
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px var(--gap);
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: var(--gap);
+}
+
+h1 {
+  font-family: var(--slab);
+  font-weight: 600;
+  font-size: 1.3rem;
+  letter-spacing: -0.01em;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.eq {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.eq label {
+  font-family: var(--slab);
+  font-size: 1.05rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+#equation {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 1rem;
+  padding: 9px 11px;
+  min-height: 44px;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+#equation:focus-visible, .btn:focus-visible, input:focus-visible,
+select:focus-visible, #plot:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  min-height: 1.3em;
+}
+.note.bad { color: var(--pen-1); font-weight: 500; }
+.note .mono { font-family: var(--mono); }
+
+/* ---- main split ---- */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 248px;
+  gap: var(--gap);
+  align-items: start;
+}
+
+.sheet-box {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  /* Square, so a circle in the field reads as a circle. Centred in its
+     column rather than pinned left, which leaves the gap all on one side. */
+  max-width: min(100%, 74vh);
+  margin-inline: auto;
+  aspect-ratio: 1 / 1;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+#plot { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+
+/* ---- instrument panel ---- */
+
+.panel { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+
+.group { display: flex; flex-direction: column; gap: 7px; }
+
+.group > h2 {
+  font-family: var(--slab);
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin: 0 0 1px;
+  color: var(--ink);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.87rem;
+  color: var(--ink-soft);
+}
+
+.row input[type="number"] {
+  width: 72px;
+  font-family: var(--slab);
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding: 7px 8px;
+  min-height: 38px;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+.pair { display: flex; gap: 6px; }
+.pair input { width: 64px; }
+
+.row input[type="range"] { width: 108px; accent-color: var(--focus); height: 38px; }
+
+.row select {
+  font-family: var(--sans);
+  font-size: 0.87rem;
+  padding: 7px 8px;
+  min-height: 38px;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+.val {
+  font-family: var(--slab);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.btn {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 8px 11px;
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.btn:hover { border-color: var(--axis); }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+
+hr.sep { width: 100%; border: 0; border-top: 1px solid var(--rule); margin: 2px 0; }
+
+/* ---- curve list ---- */
+
+#curves { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+#curves li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 8px;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  font-family: var(--slab);
+  font-size: 0.87rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.swatch { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+
+#curves .drop {
+  margin-left: auto;
+  min-width: 30px;
+  min-height: 30px;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+#curves .drop:hover { color: var(--pen-1); }
+#curves .drop:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.empty { font-size: 0.84rem; color: var(--ink-soft); margin: 0; }
+
+/* ---- readout rail ---- */
+
+.rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin-top: var(--gap);
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.rail b {
+  font-family: var(--slab);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+@media (max-width: 760px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .sheet-box { max-height: none; }
+  h1 { font-size: 1.15rem; }
+  .panel { flex-direction: row; flex-wrap: wrap; gap: 16px var(--gap); }
+  .group { flex: 1 1 240px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 1ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <h1>Slope Field Plotter</h1>
+    <div class="eq">
+      <label for="equation">dy/dx =</label>
+      <input id="equation" type="text" value="x + y" spellcheck="false"
+             autocomplete="off" autocapitalize="off"
+             aria-describedby="readback">
+    </div>
+    <p class="note" id="readback"></p>
+  </div>
+
+  <div class="split">
+
+    <div class="sheet-box">
+      <canvas id="plot" tabindex="0" role="img"
+              aria-label="Slope field. Click to trace a solution curve, or use the arrow keys and press Enter."></canvas>
+    </div>
+
+    <div class="panel">
+
+      <div class="group">
+        <h2>Window</h2>
+        <div class="row">
+          <span>x from, to</span>
+          <span class="pair">
+            <input id="xmin" type="number" value="-5" step="1" aria-label="x minimum">
+            <input id="xmax" type="number" value="5" step="1" aria-label="x maximum">
+          </span>
+        </div>
+        <div class="row">
+          <span>y from, to</span>
+          <span class="pair">
+            <input id="ymin" type="number" value="-5" step="1" aria-label="y minimum">
+            <input id="ymax" type="number" value="5" step="1" aria-label="y maximum">
+          </span>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="zoom-in" type="button">Zoom in</button>
+          <button class="btn" id="zoom-out" type="button">Zoom out</button>
+          <button class="btn" id="reset-view" type="button">Reset</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <h2>Field</h2>
+        <div class="row">
+          <label for="density">Segments across</label>
+          <span class="val" id="density-val">21</span>
+        </div>
+        <div class="row">
+          <input id="density" type="range" min="7" max="41" step="2" value="21"
+                 style="width:100%" aria-label="Segments across">
+        </div>
+        <div class="row">
+          <label for="ticklen">Tick length</label>
+          <span class="val" id="ticklen-val">70%</span>
+        </div>
+        <div class="row">
+          <input id="ticklen" type="range" min="30" max="100" step="5" value="70"
+                 style="width:100%" aria-label="Tick length">
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <h2>Curves</h2>
+        <div class="row">
+          <label for="method">Method</label>
+          <select id="method">
+            <option value="rk4">Runge-Kutta 4</option>
+            <option value="euler">Euler</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="stepsize">Step size</label>
+          <span class="val" id="stepsize-val">0.05</span>
+        </div>
+        <div class="row">
+          <input id="stepsize" type="range" min="1" max="50" step="1" value="5"
+                 style="width:100%" aria-label="Step size">
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="toggle-euler" type="button" aria-pressed="false">Compare Euler</button>
+        </div>
+        <ul id="curves"></ul>
+        <p class="empty" id="curves-empty">Click the plot to trace a curve through a point.</p>
+        <div class="btn-row">
+          <button class="btn" id="undo" type="button">Undo</button>
+          <button class="btn" id="clear" type="button">Clear</button>
+        </div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="group">
+        <h2>Examples</h2>
+        <div class="row">
+          <select id="preset" style="width:100%" aria-label="Example equations">
+            <option value="">Pick an example</option>
+            <option value="x + y">x + y</option>
+            <option value="x / y">x / y, circles and hyperbolas</option>
+            <option value="y^2">y^2, blows up</option>
+            <option value="y(1 - y)">y(1 - y), logistic</option>
+            <option value="sin(x)cos(y)">sin(x)cos(y)</option>
+            <option value="-x/y">-x/y, circles</option>
+            <option value="y - x^2">y - x^2</option>
+            <option value="ln(y)">ln(y), undefined below the axis</option>
+            <option value="2x">2x, no y at all</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="rail">
+    <span>x <b id="rx">—</b></span>
+    <span>y <b id="ry">—</b></span>
+    <span>slope here <b id="rm">—</b></span>
+    <span id="undef-wrap" hidden><b id="undef">0</b> grid points have no slope</span>
+    <span id="vert-wrap" hidden><b id="vert">0</b> are vertical</span>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+/* ====================================================================
+   1. Reading the equation.
+   A hand written tokenizer and recursive descent parser. The text is
+   never handed to eval, so a typo gives a message instead of a surprise.
+   ==================================================================== */
+
+var FUNCS = {
+  sin: Math.sin, cos: Math.cos, tan: Math.tan,
+  asin: Math.asin, acos: Math.acos, atan: Math.atan,
+  sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+  exp: Math.exp, ln: Math.log, log: Math.log,
+  log10: function (v) { return Math.log(v) / Math.LN10; },
+  log2: function (v) { return Math.log(v) / Math.LN2; },
+  sqrt: Math.sqrt, cbrt: Math.cbrt, abs: Math.abs,
+  sign: Math.sign, floor: Math.floor, ceil: Math.ceil, round: Math.round
+};
+var FUNCS2 = { min: Math.min, max: Math.max, atan2: Math.atan2, pow: Math.pow, mod: function (a, b) { return a % b; } };
+var CONSTS = { pi: Math.PI, e: Math.E, tau: 2 * Math.PI };
+
+var WORDS = Object.keys(FUNCS).concat(Object.keys(FUNCS2), Object.keys(CONSTS), ["x", "y"])
+  .sort(function (a, b) { return b.length - a.length; });
+
+function ParseError(message, at) {
+  this.message = message;
+  this.at = at;
+}
+
+function tokenize(src) {
+  var out = [];
+  var i = 0;
+  while (i < src.length) {
+    var ch = src[i];
+    if (ch === " " || ch === "\t") { i++; continue; }
+    if ((ch >= "0" && ch <= "9") || ch === ".") {
+      var j = i;
+      while (j < src.length && ((src[j] >= "0" && src[j] <= "9") || src[j] === ".")) j++;
+      var text = src.slice(i, j);
+      if ((text.match(/\./g) || []).length > 1) throw new ParseError("\"" + text + "\" has too many decimal points", i);
+      out.push({ kind: "num", value: parseFloat(text), at: i });
+      i = j;
+      continue;
+    }
+    if (/[A-Za-z]/.test(ch)) {
+      var hit = null;
+      for (var w = 0; w < WORDS.length; w++) {
+        if (src.startsWith(WORDS[w], i)) { hit = WORDS[w]; break; }
+      }
+      if (hit === null) {
+        var bad = src.slice(i).match(/^[A-Za-z]+/)[0];
+        throw new ParseError("I do not know \"" + bad + "\". Use x, y, or a function like sin or sqrt.", i);
+      }
+      out.push({ kind: "word", value: hit, at: i });
+      i += hit.length;
+      continue;
+    }
+    if ("+-*/^(),".indexOf(ch) >= 0) {
+      out.push({ kind: ch === "," ? "," : (ch === "(" || ch === ")" ? ch : "op"), value: ch, at: i });
+      i++;
+      continue;
+    }
+    if (ch === "−") { out.push({ kind: "op", value: "-", at: i }); i++; continue; }
+    if (ch === "×" || ch === "⋅") { out.push({ kind: "op", value: "*", at: i }); i++; continue; }
+    if (ch === "÷") { out.push({ kind: "op", value: "/", at: i }); i++; continue; }
+    throw new ParseError("\"" + ch + "\" does not belong in an equation", i);
+  }
+  return out;
+}
+
+/* 2x, xy, 3sin(x) and (x+1)(y-1) all mean multiplication. */
+function addImpliedTimes(tokens) {
+  var out = [];
+  for (var i = 0; i < tokens.length; i++) {
+    if (i > 0) {
+      var prev = tokens[i - 1];
+      var here = tokens[i];
+      var prevEnds = prev.kind === "num" || prev.kind === ")" ||
+        (prev.kind === "word" && CONSTS.hasOwnProperty(prev.value)) ||
+        (prev.kind === "word" && (prev.value === "x" || prev.value === "y"));
+      var hereStarts = here.kind === "num" || here.kind === "(" || here.kind === "word";
+      if (prevEnds && hereStarts) out.push({ kind: "op", value: "*", at: here.at, implied: true });
+    }
+    out.push(tokens[i]);
+  }
+  return out;
+}
+
+function parse(src) {
+  var tokens = addImpliedTimes(tokenize(src));
+  var pos = 0;
+
+  function peek() { return pos < tokens.length ? tokens[pos] : null; }
+  function endAt() { return src.length; }
+
+  function expect(kind, value, what) {
+    var t = peek();
+    if (!t || t.kind !== kind || (value !== null && t.value !== value)) {
+      throw new ParseError("Expected " + what, t ? t.at : endAt());
+    }
+    pos++;
+    return t;
+  }
+
+  function parseExpr() {
+    var left = parseTerm();
+    for (;;) {
+      var t = peek();
+      if (t && t.kind === "op" && (t.value === "+" || t.value === "-")) {
+        pos++;
+        var right = parseTerm();
+        left = t.value === "+" ? add(left, right) : sub(left, right);
+      } else return left;
+    }
+  }
+
+  function parseTerm() {
+    var left = parseUnary();
+    for (;;) {
+      var t = peek();
+      if (t && t.kind === "op" && (t.value === "*" || t.value === "/")) {
+        pos++;
+        var right = parseUnary();
+        left = t.value === "*" ? mul(left, right) : div(left, right);
+      } else return left;
+    }
+  }
+
+  function parseUnary() {
+    var t = peek();
+    if (t && t.kind === "op" && (t.value === "-" || t.value === "+")) {
+      pos++;
+      var inner = parseUnary();
+      return t.value === "-" ? neg(inner) : inner;
+    }
+    return parsePower();
+  }
+
+  function parsePower() {
+    var base = parsePrimary();
+    var t = peek();
+    if (t && t.kind === "op" && t.value === "^") {
+      pos++;
+      var expo = parseUnary();           // right associative, and 2^-1 works
+      return pow(base, expo);
+    }
+    return base;
+  }
+
+  function parsePrimary() {
+    var t = peek();
+    if (!t) throw new ParseError("The equation stops early. Something is missing at the end.", endAt());
+
+    if (t.kind === "num") { pos++; return konst(t.value); }
+
+    if (t.kind === "(") {
+      pos++;
+      var inner = parseExpr();
+      expect(")", ")", "a closing bracket");
+      return inner;
+    }
+
+    if (t.kind === "word") {
+      pos++;
+      if (t.value === "x") return varX;
+      if (t.value === "y") return varY;
+      if (CONSTS.hasOwnProperty(t.value)) return konst(CONSTS[t.value]);
+      if (FUNCS.hasOwnProperty(t.value)) {
+        expect("(", "(", "a bracket after " + t.value);
+        var arg = parseExpr();
+        expect(")", ")", "a closing bracket for " + t.value);
+        return call1(FUNCS[t.value], arg);
+      }
+      if (FUNCS2.hasOwnProperty(t.value)) {
+        expect("(", "(", "a bracket after " + t.value);
+        var a = parseExpr();
+        expect(",", ",", t.value + " needs two values, separated by a comma");
+        var b = parseExpr();
+        expect(")", ")", "a closing bracket for " + t.value);
+        return call2(FUNCS2[t.value], a, b);
+      }
+    }
+
+    if (t.kind === ")") throw new ParseError("A closing bracket with nothing to close", t.at);
+    throw new ParseError("\"" + t.value + "\" cannot go here", t.at);
+  }
+
+  var tree = parseExpr();
+  if (pos < tokens.length) {
+    throw new ParseError("\"" + tokens[pos].value + "\" is left over at the end", tokens[pos].at);
+  }
+  return tree;
+}
+
+function konst(v) { return function () { return v; }; }
+function varX(x) { return x; }
+function varY(x, y) { return y; }
+function add(a, b) { return function (x, y) { return a(x, y) + b(x, y); }; }
+function sub(a, b) { return function (x, y) { return a(x, y) - b(x, y); }; }
+function mul(a, b) { return function (x, y) { return a(x, y) * b(x, y); }; }
+function div(a, b) { return function (x, y) { return a(x, y) / b(x, y); }; }
+function neg(a) { return function (x, y) { return -a(x, y); }; }
+function pow(a, b) { return function (x, y) { return Math.pow(a(x, y), b(x, y)); }; }
+function call1(fn, a) { return function (x, y) { return fn(a(x, y)); }; }
+function call2(fn, a, b) { return function (x, y) { return fn(a(x, y), b(x, y)); }; }
+
+var LEAD = /^\s*(?:dy\s*\/\s*dx|d\s*y\s*\/\s*d\s*x|y\s*['’]|f\s*\(\s*x\s*,\s*y\s*\)|slope)\s*=\s*/i;
+
+function readEquation(raw) {
+  var text = String(raw).replace(LEAD, "").trim();
+  if (text === "") throw new ParseError("Type a rule for the slope, such as x + y", 0);
+  return { fn: parse(text), text: text };
+}
+
+/* How the equation was understood, written back in full. */
+function describe(text) {
+  var spaced = text
+    .replace(/\s+/g, "")
+    .replace(/([+\-*/^])/g, " $1 ")
+    .replace(/\(\s*/g, "(")
+    .replace(/\s*\)/g, ")")
+    .replace(/,/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return spaced;
+}
+
+/* ====================================================================
+   2. The maths. Same rules as the Python version.
+   ==================================================================== */
+
+function slopeAt(fn, x, y) {
+  var m;
+  try { m = fn(x, y); } catch (err) { return NaN; }
+  if (typeof m !== "number") return NaN;
+  return m;                      // may be Infinity, which means vertical
+}
+
+/* A unit step along the field. Steep slopes give a short move in x and a
+   long one in y, instead of one huge jump. The reference direction keeps
+   the curve going the same way round a vertical tangent. */
+function unitStep(fn, x, y, refX, refY) {
+  var m = slopeAt(fn, x, y);
+  if (Number.isNaN(m)) return null;
+  var sx, sy;
+  if (!Number.isFinite(m)) { sx = 0; sy = 1; }
+  else {
+    var size = Math.sqrt(1 + m * m);
+    sx = 1 / size;
+    sy = m / size;
+  }
+  if (sx * refX + sy * refY < 0) { sx = -sx; sy = -sy; }
+  return [sx, sy];
+}
+
+function solveHalf(fn, x0, y0, h, method, direction, win, maxSteps) {
+  var xmin = win[0], xmax = win[1], ymin = win[2], ymax = win[3];
+  var padX = 0.02 * (xmax - xmin);
+  var padY = 0.5 * (ymax - ymin);
+  var pts = [[x0, y0]];
+  var x = x0, y = y0;
+
+  var m0 = slopeAt(fn, x, y);
+  if (Number.isNaN(m0)) return pts;
+  var refX, refY;
+  if (!Number.isFinite(m0)) { refX = 0; refY = direction; }
+  else {
+    var s0 = Math.sqrt(1 + m0 * m0);
+    refX = direction / s0;
+    refY = direction * m0 / s0;
+  }
+
+  for (var i = 0; i < maxSteps; i++) {
+    var nx, ny;
+    if (method === "euler") {
+      var step = direction * h;
+      var m = slopeAt(fn, x, y);
+      if (!Number.isFinite(m)) break;
+      // One Euler step at a near vertical tangent would leap the window.
+      if (Math.abs(step * m) > 0.25 * (ymax - ymin)) break;
+      nx = x + step;
+      ny = y + step * m;
+    } else {
+      var k1 = unitStep(fn, x, y, refX, refY);
+      if (!k1) break;
+      var k2 = unitStep(fn, x + h / 2 * k1[0], y + h / 2 * k1[1], k1[0], k1[1]);
+      if (!k2) break;
+      var k3 = unitStep(fn, x + h / 2 * k2[0], y + h / 2 * k2[1], k1[0], k1[1]);
+      if (!k3) break;
+      var k4 = unitStep(fn, x + h * k3[0], y + h * k3[1], k1[0], k1[1]);
+      if (!k4) break;
+      nx = x + h * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) / 6;
+      ny = y + h * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) / 6;
+      refX = k1[0];
+      refY = k1[1];
+    }
+
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) break;
+    if (Math.abs(ny) > 1e6 || Math.abs(nx) > 1e6) break;
+
+    x = nx; y = ny;
+    pts.push([x, y]);
+
+    if (x < xmin - padX || x > xmax + padX) break;
+    if (y < ymin - padY || y > ymax + padY) break;
+  }
+  return pts;
+}
+
+function solveThrough(fn, x0, y0, h, method, win) {
+  var maxSteps = method === "euler" ? 4000 : 7000;
+  var right = solveHalf(fn, x0, y0, h, method, 1, win, maxSteps);
+  var left = solveHalf(fn, x0, y0, h, method, -1, win, maxSteps);
+  left.reverse();
+  return { points: left.concat(right.slice(1)), startIndex: left.length - 1 };
+}
+
+/* ====================================================================
+   3. State
+   ==================================================================== */
+
+var state = {
+  raw: "x + y",
+  fn: null,
+  win: [-5, 5, -5, 5],
+  nx: 21,
+  tick: 0.70,
+  h: 0.05,
+  method: "rk4",
+  showEuler: false,
+  curves: [],
+  cursor: null,
+  crosshair: null,
+  keyboardMode: false
+};
+
+var PENS = ["--pen-1", "--pen-2", "--pen-3", "--pen-4", "--pen-5", "--pen-6"];
+var nextPen = 0;
+var canvas = document.getElementById("plot");
+var ctx = canvas.getContext("2d");
+var cssW = 1, cssH = 1;
+
+function penColor(i) {
+  return getComputedStyle(document.documentElement).getPropertyValue(PENS[i % PENS.length]).trim() || "#C2410C";
+}
+function token(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function store(key, value) {
+  try { localStorage.setItem(key, value); } catch (err) { /* private window, fine */ }
+}
+function recall(key) {
+  try { return localStorage.getItem(key); } catch (err) { return null; }
+}
+
+/* ====================================================================
+   4. Drawing
+   ==================================================================== */
+
+function sizeCanvas() {
+  var rect = canvas.getBoundingClientRect();
+  cssW = Math.max(1, Math.round(rect.width));
+  cssH = Math.max(1, Math.round(rect.height));
+  var dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function scaleX() { return cssW / (state.win[1] - state.win[0]); }
+function scaleY() { return cssH / (state.win[3] - state.win[2]); }
+function toScreenX(x) { return (x - state.win[0]) * scaleX(); }
+function toScreenY(y) { return cssH - (y - state.win[2]) * scaleY(); }
+function toMathX(px) { return state.win[0] + px / scaleX(); }
+function toMathY(py) { return state.win[2] + (cssH - py) / scaleY(); }
+
+function niceStep(range, target) {
+  var rough = range / target;
+  var mag = Math.pow(10, Math.floor(Math.log(rough) / Math.LN10));
+  var norm = rough / mag;
+  var step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  return step * mag;
+}
+
+function drawGrid() {
+  var w = state.win;
+  var stepX = niceStep(w[1] - w[0], 10);
+  var stepY = niceStep(w[3] - w[2], 10);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = token("--rule");
+  ctx.beginPath();
+  for (var gx = Math.ceil(w[0] / stepX) * stepX; gx <= w[1]; gx += stepX) {
+    var px = Math.round(toScreenX(gx)) + 0.5;
+    ctx.moveTo(px, 0); ctx.lineTo(px, cssH);
+  }
+  for (var gy = Math.ceil(w[2] / stepY) * stepY; gy <= w[3]; gy += stepY) {
+    var py = Math.round(toScreenY(gy)) + 0.5;
+    ctx.moveTo(0, py); ctx.lineTo(cssW, py);
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle = token("--axis");
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  if (w[2] <= 0 && w[3] >= 0) { var ay = Math.round(toScreenY(0)) + 0.5; ctx.moveTo(0, ay); ctx.lineTo(cssW, ay); }
+  if (w[0] <= 0 && w[1] >= 0) { var ax = Math.round(toScreenX(0)) + 0.5; ctx.moveTo(ax, 0); ctx.lineTo(ax, cssH); }
+  ctx.stroke();
+
+}
+
+/* The numbers go on last, after the segments, so nothing is painted over
+   them. Each sits on a patch of the sheet colour as well, for where it
+   lands in the middle of a dense part of the field. */
+function drawAxisLabels() {
+  var w = state.win;
+  var stepX = niceStep(w[1] - w[0], 10);
+  var stepY = niceStep(w[3] - w[2], 10);
+  var sheetColor = token("--sheet");
+  var labelColor = token("--ink-soft");
+  ctx.font = "11px 'Zilla Slab', Georgia, serif";
+
+  function label(text, x, y, align, baseline) {
+    ctx.textAlign = align;
+    ctx.textBaseline = baseline;
+    var tw = ctx.measureText(text).width;
+    var th = 12;
+    var lx = align === "center" ? x - tw / 2 : (align === "right" ? x - tw : x);
+    var ly = baseline === "top" ? y : y - th / 2;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = sheetColor;
+    ctx.fillRect(lx - 2, ly - 1, tw + 4, th + 2);
+    ctx.restore();
+    ctx.fillStyle = labelColor;
+    ctx.fillText(text, x, y);
+  }
+
+  var baseY = (w[2] <= 0 && w[3] >= 0) ? toScreenY(0) : cssH - 16;
+  for (var tx = Math.ceil(w[0] / stepX) * stepX; tx <= w[1]; tx += stepX) {
+    if (Math.abs(tx) < stepX / 1000) continue;
+    var sx = toScreenX(tx);
+    if (sx < 14 || sx > cssW - 14) continue;
+    label(trim(tx), sx, Math.min(cssH - 15, baseY + 4), "center", "top");
+  }
+  var baseX = (w[0] <= 0 && w[1] >= 0) ? toScreenX(0) : cssW - 4;
+  for (var ty = Math.ceil(w[2] / stepY) * stepY; ty <= w[3]; ty += stepY) {
+    if (Math.abs(ty) < stepY / 1000) continue;
+    var sy = toScreenY(ty);
+    if (sy < 10 || sy > cssH - 10) continue;
+    label(trim(ty), Math.max(24, baseX - 5), sy, "right", "middle");
+  }
+}
+
+function trim(v) {
+  var r = Math.round(v * 1000) / 1000;
+  return String(r);
+}
+
+/* Every segment the same length on screen, whatever the slope and
+   whatever the shape of the window. */
+function drawField() {
+  var w = state.win;
+  var nx = state.nx;
+  // Rows are chosen so the spacing is square on screen, whatever the
+  // window shape. A fixed step for both axes is what stacks 200 rows on
+  // top of each other the moment somebody plots y from -50 to 50.
+  var ny = Math.max(5, Math.round(nx * cssH / cssW));
+
+  var pxX = scaleX(), pxY = scaleY();
+  var spacingPx = cssW / (nx - 1);
+  var half = state.tick * spacingPx / 2;
+
+  var undef = 0, vertical = 0;
+  var rgb = token("--field") || "30, 45, 61";
+
+  ctx.lineCap = "round";
+  for (var i = 0; i < nx; i++) {
+    var x = w[0] + (w[1] - w[0]) * i / (nx - 1);
+    for (var j = 0; j < ny; j++) {
+      var y = w[2] + (w[3] - w[2]) * j / (ny - 1);
+      var m = slopeAt(state.fn, x, y);
+      var cx = toScreenX(x), cy = toScreenY(y);
+
+      if (Number.isNaN(m)) {
+        undef++;
+        ctx.fillStyle = "rgba(" + rgb + ", 0.28)";
+        ctx.beginPath();
+        ctx.arc(cx, cy, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
+
+      var dx, dy;
+      if (!Number.isFinite(m)) {
+        vertical++;
+        dx = 0; dy = half;
+      } else {
+        var mPx = m * pxY / pxX;
+        dx = half / Math.sqrt(1 + mPx * mPx);
+        dy = mPx * dx;
+      }
+
+      // Steeper reads stronger, so the eye can follow the flow.
+      var steep = Math.atan(Math.abs(Number.isFinite(m) ? m * pxY / pxX : 1e9)) / (Math.PI / 2);
+      ctx.strokeStyle = "rgba(" + rgb + ", " + (0.55 + 0.45 * steep).toFixed(3) + ")";
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(cx - dx, cy + dy);
+      ctx.lineTo(cx + dx, cy - dy);
+      ctx.stroke();
+    }
+  }
+
+  var uw = document.getElementById("undef-wrap");
+  document.getElementById("undef").textContent = String(undef);
+  uw.hidden = undef === 0;
+  var vw = document.getElementById("vert-wrap");
+  document.getElementById("vert").textContent = String(vertical);
+  vw.hidden = vertical === 0;
+}
+
+function drawOneCurve(points, startIndex, progress, color, dashed) {
+  if (points.length < 2) return;
+  var reach = progress >= 1 ? points.length : 1 + Math.floor(progress * points.length);
+  var lo = Math.max(0, startIndex - reach);
+  var hi = Math.min(points.length - 1, startIndex + reach);
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = dashed ? 1.3 : 2.2;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  if (dashed) { ctx.setLineDash([5, 4]); ctx.globalAlpha = 0.85; }
+  ctx.beginPath();
+  var started = false;
+  for (var i = lo; i <= hi; i++) {
+    var sx = toScreenX(points[i][0]), sy = toScreenY(points[i][1]);
+    // A jump means the curve left and came back; lift the pen.
+    if (started && (Math.abs(sx) > 1e5 || Math.abs(sy) > 1e5)) { started = false; continue; }
+    if (!started) { ctx.moveTo(sx, sy); started = true; }
+    else ctx.lineTo(sx, sy);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawCurves() {
+  for (var i = 0; i < state.curves.length; i++) {
+    var c = state.curves[i];
+    var color = penColor(c.pen);
+    if (state.showEuler && c.euler) drawOneCurve(c.euler.points, c.euler.startIndex, c.progress, color, true);
+    drawOneCurve(c.solved.points, c.solved.startIndex, c.progress, color, false);
+
+    var sx = toScreenX(c.x0), sy = toScreenY(c.y0);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = token("--sheet");
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+}
+
+function drawCrosshair() {
+  if (!state.keyboardMode || !state.crosshair) return;
+  var sx = toScreenX(state.crosshair[0]), sy = toScreenY(state.crosshair[1]);
+  ctx.strokeStyle = token("--focus");
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(sx - 9, sy); ctx.lineTo(sx + 9, sy);
+  ctx.moveTo(sx, sy - 9); ctx.lineTo(sx, sy + 9);
+  ctx.stroke();
+}
+
+function render() {
+  if (!state.fn) return;
+  ctx.clearRect(0, 0, cssW, cssH);
+  drawGrid();
+  drawField();
+  drawAxisLabels();
+  drawCurves();
+  drawCrosshair();
+}
+
+/* ====================================================================
+   5. Curve bookkeeping
+   ==================================================================== */
+
+var animating = false;
+
+function computeCurve(c) {
+  c.solved = solveThrough(state.fn, c.x0, c.y0, state.h, state.method, state.win);
+  c.euler = solveThrough(state.fn, c.x0, c.y0, state.h, "euler", state.win);
+}
+
+function recomputeAll() {
+  for (var i = 0; i < state.curves.length; i++) computeCurve(state.curves[i]);
+}
+
+function addCurve(x, y) {
+  if (state.curves.length >= 12) state.curves.shift();
+  var c = { x0: x, y0: y, pen: nextPen++, progress: 0 };
+  computeCurve(c);
+  state.curves.push(c);
+  listCurves();
+  startAnimation();
+}
+
+function startAnimation() {
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduced) {
+    for (var i = 0; i < state.curves.length; i++) state.curves[i].progress = 1;
+    render();
+    return;
+  }
+  if (animating) return;
+  animating = true;
+  var t0 = null;
+  function frame(now) {
+    if (t0 === null) t0 = now;
+    var k = Math.min(1, (now - t0) / 500);
+    var eased = 1 - Math.pow(1 - k, 3);
+    var pending = false;
+    for (var i = 0; i < state.curves.length; i++) {
+      if (state.curves[i].progress < 1) {
+        state.curves[i].progress = eased;
+        if (eased < 1) pending = true;
+      }
+    }
+    render();
+    if (pending) requestAnimationFrame(frame);
+    else {
+      for (var j = 0; j < state.curves.length; j++) state.curves[j].progress = 1;
+      animating = false;
+      render();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function listCurves() {
+  var ul = document.getElementById("curves");
+  ul.textContent = "";
+  for (var i = 0; i < state.curves.length; i++) {
+    (function (index) {
+      var c = state.curves[index];
+      var li = document.createElement("li");
+      var dot = document.createElement("span");
+      dot.className = "swatch";
+      dot.style.background = penColor(c.pen);
+      var label = document.createElement("span");
+      label.textContent = "(" + round2(c.x0) + ", " + round2(c.y0) + ")";
+      var drop = document.createElement("button");
+      drop.className = "drop";
+      drop.type = "button";
+      drop.textContent = "×";
+      drop.setAttribute("aria-label", "Remove the curve through " + round2(c.x0) + ", " + round2(c.y0));
+      drop.addEventListener("click", function () {
+        state.curves.splice(index, 1);
+        listCurves();
+        render();
+      });
+      li.appendChild(dot);
+      li.appendChild(label);
+      li.appendChild(drop);
+      ul.appendChild(li);
+    })(i);
+  }
+  document.getElementById("curves-empty").hidden = state.curves.length > 0;
+}
+
+function round2(v) { return Math.round(v * 100) / 100; }
+
+/* ====================================================================
+   6. Controls
+   ==================================================================== */
+
+function applyEquation(raw, quiet) {
+  var note = document.getElementById("readback");
+  try {
+    var result = readEquation(raw);
+    state.fn = result.fn;
+    state.raw = raw;
+    note.className = "note";
+    note.textContent = "Reading it as dy/dx = " + describe(result.text) + ".";
+    store("sf.equation", raw);
+    recomputeAll();
+    render();
+    return true;
+  } catch (err) {
+    if (err instanceof ParseError) {
+      note.className = "note bad";
+      note.textContent = err.message;
+    } else {
+      note.className = "note bad";
+      note.textContent = "That equation could not be read.";
+    }
+    return false;
+  }
+}
+
+function readWindow() {
+  var xmin = parseFloat(document.getElementById("xmin").value);
+  var xmax = parseFloat(document.getElementById("xmax").value);
+  var ymin = parseFloat(document.getElementById("ymin").value);
+  var ymax = parseFloat(document.getElementById("ymax").value);
+  if (![xmin, xmax, ymin, ymax].every(Number.isFinite)) return;
+  if (xmax - xmin < 1e-6 || ymax - ymin < 1e-6) return;
+  state.win = [xmin, xmax, ymin, ymax];
+  store("sf.win", JSON.stringify(state.win));
+  recomputeAll();
+  render();
+}
+
+function showWindow() {
+  document.getElementById("xmin").value = trim(state.win[0]);
+  document.getElementById("xmax").value = trim(state.win[1]);
+  document.getElementById("ymin").value = trim(state.win[2]);
+  document.getElementById("ymax").value = trim(state.win[3]);
+}
+
+function zoom(factor) {
+  var w = state.win;
+  var cx = (w[0] + w[1]) / 2, cy = (w[2] + w[3]) / 2;
+  var hw = (w[1] - w[0]) / 2 * factor, hh = (w[3] - w[2]) / 2 * factor;
+  state.win = [cx - hw, cx + hw, cy - hh, cy + hh];
+  showWindow();
+  store("sf.win", JSON.stringify(state.win));
+  recomputeAll();
+  render();
+}
+
+document.getElementById("equation").addEventListener("input", function (e) {
+  applyEquation(e.target.value);
+});
+
+["xmin", "xmax", "ymin", "ymax"].forEach(function (id) {
+  document.getElementById(id).addEventListener("change", readWindow);
+});
+
+document.getElementById("zoom-in").addEventListener("click", function () { zoom(1 / 1.4); });
+document.getElementById("zoom-out").addEventListener("click", function () { zoom(1.4); });
+document.getElementById("reset-view").addEventListener("click", function () {
+  state.win = [-5, 5, -5, 5];
+  showWindow();
+  store("sf.win", JSON.stringify(state.win));
+  recomputeAll();
+  render();
+});
+
+document.getElementById("density").addEventListener("input", function (e) {
+  state.nx = parseInt(e.target.value, 10);
+  document.getElementById("density-val").textContent = String(state.nx);
+  render();
+});
+
+document.getElementById("ticklen").addEventListener("input", function (e) {
+  state.tick = parseInt(e.target.value, 10) / 100;
+  document.getElementById("ticklen-val").textContent = e.target.value + "%";
+  render();
+});
+
+document.getElementById("stepsize").addEventListener("input", function (e) {
+  state.h = parseInt(e.target.value, 10) / 100;
+  document.getElementById("stepsize-val").textContent = state.h.toFixed(2);
+  recomputeAll();
+  render();
+});
+
+document.getElementById("method").addEventListener("change", function (e) {
+  state.method = e.target.value;
+  recomputeAll();
+  render();
+});
+
+document.getElementById("toggle-euler").addEventListener("click", function (e) {
+  state.showEuler = !state.showEuler;
+  e.currentTarget.setAttribute("aria-pressed", String(state.showEuler));
+  render();
+});
+
+document.getElementById("undo").addEventListener("click", function () {
+  state.curves.pop();
+  listCurves();
+  render();
+});
+
+document.getElementById("clear").addEventListener("click", function () {
+  state.curves = [];
+  listCurves();
+  render();
+});
+
+document.getElementById("preset").addEventListener("change", function (e) {
+  if (!e.target.value) return;
+  var input = document.getElementById("equation");
+  input.value = e.target.value;
+  applyEquation(e.target.value);
+  e.target.selectedIndex = 0;
+});
+
+/* ---- pointer: click adds a curve, drag pans ---- */
+
+var dragging = false, dragStart = null, winStart = null, moved = 0;
+
+canvas.addEventListener("pointerdown", function (e) {
+  canvas.setPointerCapture(e.pointerId);
+  dragging = true;
+  moved = 0;
+  dragStart = [e.offsetX, e.offsetY];
+  winStart = state.win.slice();
+});
+
+canvas.addEventListener("pointermove", function (e) {
+  var mx = toMathX(e.offsetX), my = toMathY(e.offsetY);
+  state.cursor = [mx, my];
+  showReadout(mx, my);
+
+  if (!dragging) return;
+  var dx = e.offsetX - dragStart[0], dy = e.offsetY - dragStart[1];
+  moved = Math.max(moved, Math.abs(dx) + Math.abs(dy));
+  if (moved < 4) return;
+  var shiftX = dx / scaleX(), shiftY = dy / scaleY();
+  state.win = [winStart[0] - shiftX, winStart[1] - shiftX,
+               winStart[2] + shiftY, winStart[3] + shiftY];
+  showWindow();
+  render();
+});
+
+canvas.addEventListener("pointerup", function (e) {
+  dragging = false;
+  if (moved < 4) {
+    state.keyboardMode = false;
+    addCurve(toMathX(e.offsetX), toMathY(e.offsetY));
+  } else {
+    store("sf.win", JSON.stringify(state.win));
+    recomputeAll();
+    render();
+  }
+});
+
+canvas.addEventListener("pointerleave", function () {
+  state.cursor = null;
+  showReadout(null, null);
+});
+
+/* ---- keyboard: move a crosshair, Enter drops a curve ---- */
+
+canvas.addEventListener("focus", function () {
+  if (!state.crosshair) {
+    state.crosshair = [(state.win[0] + state.win[1]) / 2, (state.win[2] + state.win[3]) / 2];
+  }
+  state.keyboardMode = true;
+  render();
+});
+
+canvas.addEventListener("blur", function () {
+  state.keyboardMode = false;
+  render();
+});
+
+canvas.addEventListener("keydown", function (e) {
+  var keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+  if (keys.indexOf(e.key) >= 0) {
+    e.preventDefault();
+    state.keyboardMode = true;
+    if (!state.crosshair) state.crosshair = [0, 0];
+    var stepX = (state.win[1] - state.win[0]) / 40;
+    var stepY = (state.win[3] - state.win[2]) / 40;
+    if (e.key === "ArrowLeft") state.crosshair[0] -= stepX;
+    if (e.key === "ArrowRight") state.crosshair[0] += stepX;
+    if (e.key === "ArrowUp") state.crosshair[1] += stepY;
+    if (e.key === "ArrowDown") state.crosshair[1] -= stepY;
+    showReadout(state.crosshair[0], state.crosshair[1]);
+    render();
+    return;
+  }
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    if (state.crosshair) addCurve(state.crosshair[0], state.crosshair[1]);
+    return;
+  }
+  if (e.key.toLowerCase() === "u") { e.preventDefault(); state.curves.pop(); listCurves(); render(); }
+  if (e.key.toLowerCase() === "c") { e.preventDefault(); state.curves = []; listCurves(); render(); }
+});
+
+function showReadout(x, y) {
+  var rx = document.getElementById("rx");
+  var ry = document.getElementById("ry");
+  var rm = document.getElementById("rm");
+  if (x === null || !state.fn) {
+    rx.textContent = "—"; ry.textContent = "—"; rm.textContent = "—";
+    return;
+  }
+  rx.textContent = x.toFixed(2);
+  ry.textContent = y.toFixed(2);
+  var m = slopeAt(state.fn, x, y);
+  if (Number.isNaN(m)) rm.textContent = "none here";
+  else if (!Number.isFinite(m)) rm.textContent = "vertical";
+  else rm.textContent = (Math.abs(m) > 9999 ? m.toExponential(1) : m.toFixed(2));
+}
+
+/* ====================================================================
+   7. Start
+   ==================================================================== */
+
+function boot() {
+  var savedEq = recall("sf.equation");
+  var savedWin = recall("sf.win");
+  if (savedWin) {
+    try {
+      var w = JSON.parse(savedWin);
+      if (Array.isArray(w) && w.length === 4 && w.every(Number.isFinite)) state.win = w;
+    } catch (err) { /* ignore */ }
+  }
+  if (savedEq) {
+    document.getElementById("equation").value = savedEq;
+    state.raw = savedEq;
+  }
+  showWindow();
+  sizeCanvas();
+
+  if (!applyEquation(state.raw, true)) {
+    document.getElementById("equation").value = "x + y";
+    applyEquation("x + y", true);
+  }
+
+  // Open with work already on the sheet, not an empty grid.
+  addCurve(0, 1);
+  addCurve(0, -2);
+  listCurves();
+  render();
+}
+
+var resizeTimer = null;
+window.addEventListener("resize", function () {
+  if (resizeTimer) clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(function () { sizeCanvas(); render(); }, 80);
+});
+
+if (window.matchMedia) {
+  var dark = window.matchMedia("(prefers-color-scheme: dark)");
+  if (dark.addEventListener) dark.addEventListener("change", function () { render(); });
+}
+
+boot();
+</script>
+</body>
+</html>
